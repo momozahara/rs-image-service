@@ -1,7 +1,7 @@
-use std::io::Cursor;
+use std::{env, io::Cursor, sync::Arc};
 
 use axum::{
-    extract::{DefaultBodyLimit, Multipart, Request},
+    extract::{DefaultBodyLimit, Multipart, Request, State},
     http::{header, StatusCode},
     middleware::{self, Next},
     response::{IntoResponse, Response},
@@ -22,6 +22,10 @@ use tower_http::services::{ServeDir, ServeFile};
 use tracing_subscriber::fmt::time::OffsetTime;
 use uuid::Uuid;
 
+struct AppState {
+    storage_path: String,
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // don't know why am not even using it kekw
@@ -35,10 +39,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_timer(timer)
         .init();
 
-    fs::create_dir_all("images/preview").await.unwrap();
+    let storage_path = match env::var("STORAGE") {
+        Ok(path) => path,
+        Err(err) => {
+            tracing::error!("{err}");
+            std::process::exit(1);
+        }
+    };
+
+    let shared_state = Arc::new(AppState { storage_path });
+
+    fs::create_dir_all(format!("{}/preview", &shared_state.storage_path))
+        .await
+        .unwrap();
 
     let html_service = ServeDir::new("html").not_found_service(ServeFile::new("html/404.html"));
-    let image_service = ServeDir::new("images").not_found_service(ServeFile::new("html/404.html"));
+    let image_service = ServeDir::new(&shared_state.storage_path)
+        .not_found_service(ServeFile::new("html/404.html"));
 
     // can use this but its not return error(statuscode 413) that I want
     // DefaultBodyLimit::max(1024 * 1024 * 10)
@@ -53,7 +70,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/lists", get(lists))
         .nest("/api", api)
         .nest_service("/static", image_service)
-        .fallback_service(html_service);
+        .fallback_service(html_service)
+        .with_state(shared_state);
 
     let addr = "0.0.0.0:3000";
     let listener = match TcpListener::bind(addr).await {
@@ -83,7 +101,10 @@ async fn upload_middleware(request: Request, next: Next) -> Result<Response, Sta
     Ok(response)
 }
 
-async fn upload(mut multipart: Multipart) -> impl IntoResponse {
+async fn upload(
+    State(shared_state): State<Arc<AppState>>,
+    mut multipart: Multipart,
+) -> impl IntoResponse {
     let field_result = multipart.next_field().await;
 
     if let Err(err) = field_result {
@@ -95,8 +116,6 @@ async fn upload(mut multipart: Multipart) -> impl IntoResponse {
 
     let content_type = field.content_type().unwrap().to_string();
     let data = field.bytes().await.unwrap();
-
-    // limit 10MB
 
     let format: Option<ImageFormat>;
     let mut extension: Option<String> = None;
@@ -121,14 +140,24 @@ async fn upload(mut multipart: Multipart) -> impl IntoResponse {
 
     let uuid = Uuid::new_v4();
     {
-        let name = format!("images/{}.{}", uuid, extension.as_ref().unwrap());
+        let name = format!(
+            "{}/{}.{}",
+            &shared_state.storage_path,
+            uuid,
+            extension.as_ref().unwrap()
+        );
         let mut file = File::create(name).await.unwrap();
         for chunk in data.chunks(1024) {
             file.write_all(chunk).await.unwrap();
         }
     }
     {
-        let name = format!("images/preview/{}.{}", uuid, extension.as_ref().unwrap());
+        let name = format!(
+            "{}/preview/{}.{}",
+            &shared_state.storage_path,
+            uuid,
+            extension.as_ref().unwrap()
+        );
         let cursor = Cursor::new(&data);
         let mut img_reader = image::io::Reader::new(cursor);
         img_reader.set_format(format.unwrap());
@@ -152,8 +181,8 @@ async fn upload(mut multipart: Multipart) -> impl IntoResponse {
     (StatusCode::OK).into_response()
 }
 
-async fn lists() -> impl IntoResponse {
-    let mut paths = fs::read_dir("images").await.unwrap();
+async fn lists(State(shared_state): State<Arc<AppState>>) -> impl IntoResponse {
+    let mut paths = fs::read_dir(&shared_state.storage_path).await.unwrap();
 
     let mut body = String::new();
     while let Some(path) = paths.next_entry().await.unwrap() {
