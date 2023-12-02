@@ -105,77 +105,71 @@ async fn upload(
     State(shared_state): State<Arc<AppState>>,
     mut multipart: Multipart,
 ) -> impl IntoResponse {
-    let field_result = multipart.next_field().await;
+    while let Some(field) = multipart.next_field().await.unwrap() {
+        let content_type = field.content_type().unwrap().to_string();
+        let data = field.bytes().await.unwrap();
 
-    if let Err(err) = field_result {
-        tracing::error!("{err}");
-        return (StatusCode::INTERNAL_SERVER_ERROR).into_response();
-    }
-
-    let field = field_result.unwrap().unwrap();
-
-    let content_type = field.content_type().unwrap().to_string();
-    let data = field.bytes().await.unwrap();
-
-    let format: Option<ImageFormat>;
-    let mut extension: Option<String> = None;
-    if !["image/png", "image/jpeg"].contains(&content_type.as_str()) {
-        return (StatusCode::UNSUPPORTED_MEDIA_TYPE).into_response();
-    } else {
-        format = match content_type.as_str() {
-            "image/png" => {
-                extension = Some("png".to_owned());
-                Some(ImageFormat::Png)
-            }
-            "image/jpeg" => {
-                extension = Some("jpeg".to_owned());
-                Some(ImageFormat::Jpeg)
-            }
-            _ => None,
-        };
-        if format.is_none() {
+        let format: Option<ImageFormat>;
+        let mut extension: Option<String> = None;
+        if !["image/png", "image/jpeg"].contains(&content_type.as_str()) {
             return (StatusCode::UNSUPPORTED_MEDIA_TYPE).into_response();
+        } else {
+            format = match content_type.as_str() {
+                "image/png" => {
+                    extension = Some("png".to_owned());
+                    Some(ImageFormat::Png)
+                }
+                "image/jpeg" => {
+                    extension = Some("jpeg".to_owned());
+                    Some(ImageFormat::Jpeg)
+                }
+                _ => None,
+            };
+            if format.is_none() {
+                return (StatusCode::UNSUPPORTED_MEDIA_TYPE).into_response();
+            }
         }
-    }
 
-    let uuid = Uuid::new_v4();
-    {
-        let name = format!(
-            "{}/{}.{}",
-            &shared_state.storage_path,
-            uuid,
-            extension.as_ref().unwrap()
-        );
-        let mut file = File::create(name).await.unwrap();
-        for chunk in data.chunks(1024) {
-            file.write_all(chunk).await.unwrap();
+        let uuid = Uuid::new_v4();
+        {
+            let name = format!(
+                "{}/{}.{}",
+                &shared_state.storage_path,
+                uuid,
+                extension.as_ref().unwrap()
+            );
+            let mut file = File::create(name).await.unwrap();
+            for chunk in data.chunks(1024) {
+                file.write_all(chunk).await.unwrap();
+            }
         }
-    }
-    {
-        let name = format!(
-            "{}/preview/{}.{}",
-            &shared_state.storage_path,
-            uuid,
-            extension.as_ref().unwrap()
-        );
-        let cursor = Cursor::new(&data);
-        let mut img_reader = image::io::Reader::new(cursor);
-        img_reader.set_format(format.unwrap());
-        let img = img_reader.decode().unwrap();
+        {
+            let name = format!(
+                "{}/preview/{}.{}",
+                &shared_state.storage_path,
+                uuid,
+                extension.as_ref().unwrap()
+            );
+            let cursor = Cursor::new(&data);
+            let mut img_reader = image::io::Reader::new(cursor);
+            img_reader.set_format(format.unwrap());
+            let img = img_reader.decode().unwrap();
 
-        // Define the target width
-        let target_width = 240;
-        // Calculate the corresponding height to maintain the aspect ratio
-        let target_height = (target_width as f32 / img.width() as f32 * img.height() as f32) as u32;
+            // Define the target width
+            let target_width = 240;
+            // Calculate the corresponding height to maintain the aspect ratio
+            let target_height =
+                (target_width as f32 / img.width() as f32 * img.height() as f32) as u32;
 
-        let img = imageops::resize(
-            &img.to_rgba8(),
-            target_width,
-            target_height,
-            FilterType::Lanczos3,
-        );
+            let img = imageops::resize(
+                &img.to_rgba8(),
+                target_width,
+                target_height,
+                FilterType::Lanczos3,
+            );
 
-        img.save(name).unwrap();
+            img.save(name).unwrap();
+        }
     }
 
     (StatusCode::OK).into_response()

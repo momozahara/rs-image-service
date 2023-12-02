@@ -1,16 +1,18 @@
-const input = document.getElementById("image");
+const input = document.getElementById("images");
 const button = document.getElementById("upload-button");
 
 function uploadImage() {
-  const file = input.files[0];
+  const files = input.files;
 
-  if (!file) {
+  if (!files) {
     alert("Please select an image file.");
     return;
   }
 
   const formData = new FormData();
-  formData.append("image", file);
+  Array.from(files).forEach((file) => {
+    formData.append("images", file);
+  });
 
   button.disabled = true;
 
