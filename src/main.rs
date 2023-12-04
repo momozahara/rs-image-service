@@ -1,8 +1,8 @@
 use std::{env, io::Cursor, sync::Arc};
 
 use axum::{
-    extract::{DefaultBodyLimit, Multipart, Request, State},
-    http::{header, StatusCode},
+    extract::{DefaultBodyLimit, Multipart, State},
+    http::{header, Request, StatusCode},
     middleware::{self, Next},
     response::{IntoResponse, Response},
     routing::{get, post},
@@ -16,7 +16,6 @@ use time::{macros::format_description, UtcOffset};
 use tokio::{
     fs::{self, File},
     io::AsyncWriteExt,
-    net::TcpListener,
 };
 use tower_http::services::{ServeDir, ServeFile};
 use tracing_subscriber::fmt::time::OffsetTime;
@@ -73,8 +72,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .fallback_service(html_service)
         .with_state(shared_state);
 
-    let addr = "0.0.0.0:3000";
-    let listener = match TcpListener::bind(addr).await {
+    let addr = &"0.0.0.0:3000".parse().unwrap();
+    let listener = match axum::Server::try_bind(addr) {
         Ok(listener) => listener,
         Err(err) => {
             tracing::error!("{err}");
@@ -83,12 +82,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     tracing::info!("listening on port 3000");
-    axum::serve(listener, app).await.unwrap();
+    listener.serve(app.into_make_service()).await.unwrap();
 
     Ok(())
 }
 
-async fn upload_middleware(request: Request, next: Next) -> Result<Response, StatusCode> {
+async fn upload_middleware<B>(request: Request<B>, next: Next<B>) -> Result<Response, StatusCode> {
     let content_length_str = request.headers().get(header::CONTENT_LENGTH).unwrap();
     let content_length: i32 = content_length_str.to_str().unwrap().parse().unwrap();
 
