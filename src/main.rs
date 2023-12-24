@@ -90,7 +90,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 async fn upload_middleware<B>(
     mut request: Request<B>,
     next: Next<B>,
-) -> Result<Response, StatusCode>
+) -> Result<Response, impl IntoResponse>
 where
     B: axum::body::HttpBody + Send + 'static + std::marker::Unpin,
     <B as axum::body::HttpBody>::Error: std::fmt::Debug,
@@ -103,7 +103,11 @@ where
     if content_length > 1024 * 1024 * 10 {
         // drain body before return
         let _ = hyper::body::to_bytes(request.body_mut()).await.unwrap();
-        return Err(StatusCode::PAYLOAD_TOO_LARGE);
+        return Err((
+            StatusCode::PAYLOAD_TOO_LARGE,
+            "You can upload only 10MB maximum at the same time.",
+        )
+            .into_response());
     }
 
     let response = next.run(request).await;
