@@ -118,7 +118,15 @@ async fn upload(
     State(shared_state): State<Arc<AppState>>,
     mut multipart: Multipart,
 ) -> impl IntoResponse {
+    let mut error_message = String::new();
     while let Some(field) = multipart.next_field().await.unwrap() {
+        let name = field.name().unwrap();
+
+        if !name.eq("images") {
+            error_message.push_str(format!("Server does not take field \"{name}\".\n").as_str());
+            continue;
+        }
+
         let content_type = field.content_type().unwrap().to_string();
         let data = field.bytes().await.unwrap();
 
@@ -183,6 +191,14 @@ async fn upload(
 
             img.save(name).unwrap();
         }
+    }
+
+    if !error_message.is_empty() {
+        return (
+            StatusCode::OK,
+            error_message.trim_end_matches("\n").to_string(),
+        )
+            .into_response();
     }
 
     (StatusCode::OK).into_response()
