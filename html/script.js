@@ -4,7 +4,7 @@ const button = document.getElementById("upload-button");
 function uploadImage() {
   const files = input.files;
 
-  if (!files) {
+  if (files.length === 0) {
     alert("Please select an image file.");
     return;
   }
