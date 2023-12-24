@@ -20,16 +20,15 @@ function uploadImage() {
     method: "POST",
     body: formData,
   })
-    .then((response) => {
+    .then(async (response) => {
       if (response.ok) {
         alert("Image upload successfully.");
       } else {
-        throw new Error("Failed to upload image size is limit at 10MB.");
+        throw new Error(`Failed to upload image, ${await response.text()}`);
       }
     })
     .catch((error) => {
-      console.error(error);
-      alert("Failed to upload image size is limit at 10MB.");
+      alert(error.message);
     })
     .finally(() => {
       button.disabled = false;
