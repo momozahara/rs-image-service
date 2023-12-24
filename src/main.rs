@@ -6,7 +6,7 @@ use axum::{
     middleware::{self, Next},
     response::{IntoResponse, Response},
     routing::{get, post},
-    Router,
+    BoxError, Router,
 };
 use image::{
     imageops::{self, FilterType},
@@ -87,11 +87,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-async fn upload_middleware<B>(request: Request<B>, next: Next<B>) -> Result<Response, StatusCode> {
+async fn upload_middleware<B>(
+    mut request: Request<B>,
+    next: Next<B>,
+) -> Result<Response, StatusCode>
+where
+    B: axum::body::HttpBody + Send + 'static + std::marker::Unpin,
+    <B as axum::body::HttpBody>::Error: std::fmt::Debug,
+    B::Data: Send,
+    B::Error: Into<BoxError>,
+{
     let content_length_str = request.headers().get(header::CONTENT_LENGTH).unwrap();
     let content_length: usize = content_length_str.to_str().unwrap().parse().unwrap();
 
-    if content_length > 1024 * 1024 * 10 {
+    if content_length > 1024 * 1024 * 2 {
+        // drain body before return
+        let _ = hyper::body::to_bytes(request.body_mut()).await.unwrap();
         return Err(StatusCode::PAYLOAD_TOO_LARGE);
     }
 
