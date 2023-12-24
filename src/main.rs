@@ -89,7 +89,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 async fn upload_middleware<B>(request: Request<B>, next: Next<B>) -> Result<Response, StatusCode> {
     let content_length_str = request.headers().get(header::CONTENT_LENGTH).unwrap();
-    let content_length: i32 = content_length_str.to_str().unwrap().parse().unwrap();
+    let content_length: usize = content_length_str.to_str().unwrap().parse().unwrap();
 
     if content_length > 1024 * 1024 * 10 {
         return Err(StatusCode::PAYLOAD_TOO_LARGE);
