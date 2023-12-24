@@ -24,15 +24,12 @@ function uploadImage() {
       if (response.ok) {
         alert("Image upload successfully.");
       } else {
-        if (response.status === 413) {
-          alert("Failed to upload image size is limit at 10MB.");
-        } else {
-          alert("Failed to upload image.");
-        }
+        throw new Error("Failed to upload image size is limit at 10MB.");
       }
     })
     .catch((error) => {
       console.error(error);
+      alert("Failed to upload image size is limit at 10MB.");
     })
     .finally(() => {
       button.disabled = false;
