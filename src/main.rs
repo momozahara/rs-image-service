@@ -100,7 +100,7 @@ where
     let content_length_str = request.headers().get(header::CONTENT_LENGTH).unwrap();
     let content_length: usize = content_length_str.to_str().unwrap().parse().unwrap();
 
-    if content_length > 1024 * 1024 * 2 {
+    if content_length > 1024 * 1024 * 10 {
         // drain body before return
         let _ = hyper::body::to_bytes(request.body_mut()).await.unwrap();
         return Err(StatusCode::PAYLOAD_TOO_LARGE);
