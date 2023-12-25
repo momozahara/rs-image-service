@@ -120,10 +120,11 @@ async fn upload(
 ) -> impl IntoResponse {
     let mut error_message = String::new();
     while let Some(field) = multipart.next_field().await.unwrap() {
-        let name = field.name().unwrap();
+        let field_name = field.name().unwrap();
 
-        if !name.eq("images") {
-            error_message.push_str(format!("Server does not take field \"{name}\".\n").as_str());
+        if !field_name.eq("images") {
+            error_message
+                .push_str(format!("Server does not take field \"{field_name}\".\n").as_str());
             continue;
         }
 
@@ -151,46 +152,44 @@ async fn upload(
             }
         }
 
+        let mut name: String;
+
         let uuid = Uuid::new_v4();
-        {
-            let name = format!(
-                "{}/{}.{}",
-                &shared_state.storage_path,
-                uuid,
-                extension.as_ref().unwrap()
-            );
-            let mut file = File::create(name).await.unwrap();
-            for chunk in data.chunks(1024) {
-                file.write_all(chunk).await.unwrap();
-            }
+        name = format!(
+            "{}/{}.{}",
+            &shared_state.storage_path,
+            uuid,
+            extension.as_ref().unwrap()
+        );
+        let mut file = File::create(name).await.unwrap();
+        for chunk in data.chunks(1024) {
+            file.write_all(chunk).await.unwrap();
         }
-        {
-            let name = format!(
-                "{}/preview/{}.{}",
-                &shared_state.storage_path,
-                uuid,
-                extension.as_ref().unwrap()
-            );
-            let cursor = Cursor::new(&data);
-            let mut img_reader = image::io::Reader::new(cursor);
-            img_reader.set_format(format.unwrap());
-            let img = img_reader.decode().unwrap();
 
-            // Define the target width
-            let target_width = 240;
-            // Calculate the corresponding height to maintain the aspect ratio
-            let target_height =
-                (target_width as f32 / img.width() as f32 * img.height() as f32) as u32;
+        name = format!(
+            "{}/preview/{}.{}",
+            &shared_state.storage_path,
+            uuid,
+            extension.as_ref().unwrap()
+        );
+        let cursor = Cursor::new(&data);
+        let mut img_reader = image::io::Reader::new(cursor);
+        img_reader.set_format(format.unwrap());
+        let img = img_reader.decode().unwrap();
 
-            let img = imageops::resize(
-                &img.to_rgba8(),
-                target_width,
-                target_height,
-                FilterType::Lanczos3,
-            );
+        // Define the target width
+        let target_width = 240;
+        // Calculate the corresponding height to maintain the aspect ratio
+        let target_height = (target_width as f32 / img.width() as f32 * img.height() as f32) as u32;
 
-            img.save(name).unwrap();
-        }
+        let img = imageops::resize(
+            &img.to_rgba8(),
+            target_width,
+            target_height,
+            FilterType::Lanczos3,
+        );
+
+        img.save(name).unwrap();
     }
 
     if !error_message.is_empty() {
