@@ -6,7 +6,7 @@ use axum::{
     middleware::{self, Next},
     response::{IntoResponse, Response},
     routing::{get, post},
-    BoxError, Router,
+    Router,
 };
 use image::{
     imageops::{self, FilterType},
@@ -92,10 +92,8 @@ async fn upload_middleware<B>(
     next: Next<B>,
 ) -> Result<Response, impl IntoResponse>
 where
-    B: axum::body::HttpBody + Send + 'static + std::marker::Unpin,
+    B: axum::body::HttpBody + std::marker::Unpin,
     <B as axum::body::HttpBody>::Error: std::fmt::Debug,
-    B::Data: Send,
-    B::Error: Into<BoxError>,
 {
     let content_length = request.body().size_hint().upper().unwrap();
 
