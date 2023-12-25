@@ -98,7 +98,7 @@ where
     let content_length = request.body().size_hint().upper().unwrap();
 
     if content_length > 1024 * 1024 * 10 {
-        // drain body before return
+        // flush body before return to prevent connection reset on windows
         let _ = hyper::body::to_bytes(request.body_mut()).await.unwrap();
         return Err((
             StatusCode::PAYLOAD_TOO_LARGE,
