@@ -1,13 +1,15 @@
 use std::{env, io::Cursor, sync::Arc};
 
 use axum::{
-    extract::{DefaultBodyLimit, Multipart, State},
-    http::{header, Request, StatusCode},
+    body::Body,
+    extract::{DefaultBodyLimit, Multipart, Request, State},
+    http::{header, StatusCode},
     middleware::{self, Next},
     response::{IntoResponse, Response},
     routing::{get, post},
     Router,
 };
+use http_body_util::BodyExt;
 use image::{
     imageops::{self, FilterType},
     ImageFormat,
@@ -72,8 +74,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .fallback_service(html_service)
         .with_state(shared_state);
 
-    let addr = &"0.0.0.0:3000".parse().unwrap();
-    let listener = match axum::Server::try_bind(addr) {
+    let addr = "0.0.0.0:3000";
+    let listener = match tokio::net::TcpListener::bind(addr).await {
         Ok(listener) => listener,
         Err(err) => {
             tracing::error!("{err}");
@@ -82,24 +84,24 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     tracing::info!("listening on port 3000");
-    listener.serve(app.into_make_service()).await.unwrap();
+    axum::serve(listener, app).await.unwrap();
 
     Ok(())
 }
 
-async fn upload_middleware<B>(
-    mut request: Request<B>,
-    next: Next<B>,
-) -> Result<Response, impl IntoResponse>
-where
-    B: axum::body::HttpBody + std::marker::Unpin,
-    <B as axum::body::HttpBody>::Error: std::fmt::Debug,
-{
-    let content_length = request.body().size_hint().upper().unwrap();
+async fn upload_middleware(request: Request, next: Next) -> Result<Response, impl IntoResponse> {
+    let (parts, body) = request.into_parts();
+
+    let bytes = body
+        .collect()
+        .await
+        .map_err(|err| (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()).into_response())
+        .unwrap()
+        .to_bytes();
+
+    let content_length = bytes.len();
 
     if content_length > 1024 * 1024 * 10 {
-        // flush body before return to prevent connection reset on windows
-        let _ = hyper::body::to_bytes(request.body_mut()).await.unwrap();
         return Err((
             StatusCode::PAYLOAD_TOO_LARGE,
             "You can upload only 10MB maximum at the same time.",
@@ -107,9 +109,9 @@ where
             .into_response());
     }
 
-    let response = next.run(request).await;
+    let request = Request::from_parts(parts, Body::from(bytes));
 
-    Ok(response)
+    Ok(next.run(request).await)
 }
 
 async fn upload(

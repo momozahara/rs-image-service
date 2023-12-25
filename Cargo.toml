@@ -6,12 +6,12 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-axum = { version = "0.6.20", features = ["multipart"] }
-hyper = "0.14.28"
+axum = { version = "0.7.2", features = ["multipart"] }
+http-body-util = "0.1.0"
 image = "0.24.7"
 time = { version = "0.3.30", features = ["macros"] }
 tokio = { version = "1.34.0", features = ["full"] }
-tower-http = { version = "0.4.4", features = ["fs"] }
+tower-http = { version = "0.5.0", features = ["fs"] }
 tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.18", features = ["time"] }
 uuid = { version = "1.6.1", features = ["v4"] }
