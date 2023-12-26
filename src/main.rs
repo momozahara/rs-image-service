@@ -1,7 +1,6 @@
 use std::{env, io::Cursor, num::ParseIntError, sync::Arc};
 
 use axum::{
-    body::Body,
     extract::{DefaultBodyLimit, Multipart, Request, State},
     http::{header, StatusCode},
     middleware::{self, Next},
@@ -9,7 +8,6 @@ use axum::{
     routing::{get, post},
     Router,
 };
-use http_body_util::BodyExt;
 use image::{
     imageops::{self, FilterType},
     ImageFormat,
@@ -90,17 +88,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 async fn upload_middleware(request: Request, next: Next) -> Result<Response, impl IntoResponse> {
-    // let (parts, body) = request.into_parts();
-
-    // let bytes = body
-    //     .collect()
-    //     .await
-    //     .map_err(|err| (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()).into_response())
-    //     .unwrap()
-    //     .to_bytes();
-    //
-    // let content_length = bytes.len();
-
     let content_length: usize = request
         .headers()
         .get(header::CONTENT_LENGTH)
@@ -120,8 +107,6 @@ async fn upload_middleware(request: Request, next: Next) -> Result<Response, imp
         )
             .into_response());
     }
-
-    // let request = Request::from_parts(parts, Body::from(bytes));
 
     Ok(next.run(request).await)
 }
