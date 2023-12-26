@@ -20,15 +20,15 @@ function uploadImage() {
     method: "POST",
     body: formData,
   })
-    .then(async (response) => {
+    .then((response) => {
       if (response.ok) {
         alert("Image upload successfully.");
       } else {
-        throw new Error(`Failed to upload image, ${await response.text()}`);
+        throw new Error();
       }
     })
-    .catch((error) => {
-      alert(error.message);
+    .catch(() => {
+      alert("Failed to upload image.");
     })
     .finally(() => {
       button.disabled = false;

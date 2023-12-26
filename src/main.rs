@@ -1,4 +1,4 @@
-use std::{env, io::Cursor, sync::Arc};
+use std::{env, io::Cursor, num::ParseIntError, sync::Arc};
 
 use axum::{
     body::Body,
@@ -90,16 +90,28 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 async fn upload_middleware(request: Request, next: Next) -> Result<Response, impl IntoResponse> {
-    let (parts, body) = request.into_parts();
+    // let (parts, body) = request.into_parts();
 
-    let bytes = body
-        .collect()
-        .await
-        .map_err(|err| (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()).into_response())
+    // let bytes = body
+    //     .collect()
+    //     .await
+    //     .map_err(|err| (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()).into_response())
+    //     .unwrap()
+    //     .to_bytes();
+    //
+    // let content_length = bytes.len();
+
+    let content_length: usize = request
+        .headers()
+        .get(header::CONTENT_LENGTH)
         .unwrap()
-        .to_bytes();
-
-    let content_length = bytes.len();
+        .to_str()
+        .unwrap()
+        .parse()
+        .map_err(|err: ParseIntError| {
+            (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()).into_response()
+        })
+        .unwrap();
 
     if content_length > 1024 * 1024 * 10 {
         return Err((
@@ -109,7 +121,7 @@ async fn upload_middleware(request: Request, next: Next) -> Result<Response, imp
             .into_response());
     }
 
-    let request = Request::from_parts(parts, Body::from(bytes));
+    // let request = Request::from_parts(parts, Body::from(bytes));
 
     Ok(next.run(request).await)
 }
