@@ -1,4 +1,4 @@
-use std::{env, io::Cursor, num::ParseIntError, sync::Arc};
+use std::{env, io::Cursor, sync::Arc};
 
 use axum::{
     extract::{DefaultBodyLimit, Multipart, Request, State},
@@ -88,16 +88,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 async fn upload_middleware(request: Request, next: Next) -> Result<Response, impl IntoResponse> {
-    let content_length: usize = request
+    let content_length = request
         .headers()
         .get(header::CONTENT_LENGTH)
-        .unwrap()
-        .to_str()
-        .unwrap()
-        .parse()
-        .map_err(|err: ParseIntError| {
-            (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()).into_response()
-        })
+        .and_then(|v| v.to_str().ok().unwrap().parse::<usize>().ok())
         .unwrap();
 
     if content_length > 1024 * 1024 * 10 {
